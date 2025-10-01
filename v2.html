@@ -63,6 +63,40 @@
     }
     #editor:focus { outline: none; }
 
+    /* Force consistent text styling - override any pasted formatting */
+    #editor,
+    #editor *,
+    #editor p,
+    #editor div,
+    #editor span,
+    #editor strong,
+    #editor b,
+    #editor em,
+    #editor i,
+    #editor u,
+    #editor mark,
+    #editor small,
+    #editor big,
+    #editor h1, #editor h2, #editor h3, #editor h4, #editor h5, #editor h6 {
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial !important;
+      font-size: 16px !important;
+      font-weight: normal !important;
+      font-style: normal !important;
+      color: var(--fg) !important;
+      background: none !important;
+      background-color: transparent !important;
+      text-decoration: none !important;
+      border: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      line-height: 1.6 !important;
+    }
+
+    /* Ensure line breaks work properly */
+    #editor br {
+      line-height: 1.6 !important;
+    }
+
     /* Inline Popup Styles */
     .transform-popup {
       position: absolute;
@@ -1136,8 +1170,21 @@
       }
     });
 
-    // Update stats on editor changes
-    editor.addEventListener('input', updateStats);
+
+    // Simple stats update on content change
+    editor.addEventListener('input', () => {
+      updateStats();
+    });
+
+    // Simple paste handler - just insert plain text
+    editor.addEventListener('paste', (e) => {
+      e.preventDefault();
+
+      // Get plain text and insert it
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      document.execCommand('insertText', false, text);
+    });
+
 
     // Model Selection Management
     async function loadModels() {

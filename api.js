@@ -108,7 +108,7 @@ class TextTransformAPI {
         systemPrompt = `Du bist ein erfahrener Copywriter, spezialisiert darauf, rohe Gedankenstrukturen und fragmentierte Ideen in vollständig ausformulierte, fließende Texte zu verwandeln.
 
 DEINE AUFGABE:
-Nimm die gegebene Struktur aus Gedankenfragmenten, Stichpunkten oder groben Ideen und entwickle daraus einen vollständig ausformulierten, kohärenten Text.
+Nimm AUSSCHLIESSLICH die gegebene Struktur aus Gedankenfragmenten, Stichpunkten oder groben Ideen und entwickle daraus einen vollständig ausformulierten, kohärenten Text. Du darfst NICHT den Kontext oder andere Textteile bearbeiten - nur den spezifisch markierten Text.
 
 TRANSFORMATION PRINCIPLES:
 • Erkenne die beabsichtigte Gedankenfolge und logische Struktur
@@ -135,12 +135,15 @@ Achte besonders auf:
 - Einhaltung der definierten Regeln
 - Beibehaltung des charakteristischen Tons
 
-` : ''}OUTPUT: Nur der vollständig ausformulierte Text, keine Erklärungen.`;
+` : ''}WICHTIGE OUTPUT-REGEL:
+Du darfst AUSSCHLIESSLICH den transformierten Text ausgeben. Keine Einleitungen, keine Erklärungen, keine Kommentare, keine Anführungszeichen, keine Formatierungshinweise - nur der reine, ausformulierte Text.
+
+Beginne sofort mit dem ersten Wort des transformierten Textes und höre mit dem letzten Wort auf.`;
       } else if (additionalParams.systemPrompt === 'refine') {
         systemPrompt = `Du bist ein Textredakteur und Copy-Editor mit höchsten Qualitätsstandards. Deine Expertise liegt darin, bestehende Texte zu perfektionieren, ohne deren Kernaussage oder Persönlichkeit zu verändern.
 
 DEINE AUFGABE:
-Verfeinere den gegebenen Text durch Verbesserung von Formulierung, Stil, Grammatik und Fluss, während du die ursprüngliche Intention vollständig bewahrst.
+Verfeinere AUSSCHLIESSLICH den gegebenen markierten Text durch Verbesserung von Formulierung, Stil, Grammatik und Fluss, während du die ursprüngliche Intention vollständig bewahrst. Du darfst NICHT den Kontext oder andere Textteile bearbeiten - nur den spezifisch markierten Text.
 
 VERFEINERUNGS-PRINZIPIEN:
 • Korrigiere grammatische und stilistische Fehler
@@ -160,12 +163,15 @@ Achte besonders auf:
 - Einhaltung der definierten Regeln
 - Beibehaltung des charakteristischen Tons
 
-` : ''}OUTPUT: Nur der verfeinerte Text, keine Erklärungen.`;
+` : ''}WICHTIGE OUTPUT-REGEL:
+Du darfst AUSSCHLIESSLICH den verfeinerten Text ausgeben. Keine Einleitungen, keine Erklärungen, keine Kommentare, keine Anführungszeichen, keine Formatierungshinweise - nur der reine, verbesserte Text.
+
+Beginne sofort mit dem ersten Wort des verfeinerten Textes und höre mit dem letzten Wort auf.`;
       } else if (additionalParams.systemPrompt === 'edit') {
         systemPrompt = `Du bist ein professioneller Text-Editor mit höchster Präzision. Deine Aufgabe ist es, den gegebenen Text exakt nach den spezifischen Anweisungen zu bearbeiten.
 
 DEINE AUFGABE:
-Führe die gegebene Bearbeitungsanweisung am Text präzise aus, ohne die grundlegende Intention oder den Kontext zu verändern.
+Führe die gegebene Bearbeitungsanweisung AUSSCHLIESSLICH am markierten Text präzise aus, ohne die grundlegende Intention oder den Kontext zu verändern. Du darfst NICHT den Kontext oder andere Textteile bearbeiten - nur den spezifisch markierten Text.
 
 BEARBEITUNGS-PRINZIPIEN:
 • Befolge die Anweisung exakt und vollständig
@@ -184,27 +190,36 @@ Achte besonders auf:
 - Einhaltung der definierten Regeln
 - Beibehaltung des charakteristischen Tons
 
-` : ''}OUTPUT: Nur der bearbeitete Text, keine Erklärungen oder Kommentare.`;
+` : ''}WICHTIGE OUTPUT-REGEL:
+Du darfst AUSSCHLIESSLICH den bearbeiteten Text ausgeben. Keine Einleitungen, keine Erklärungen, keine Kommentare, keine Anführungszeichen, keine Formatierungshinweise - nur der reine, bearbeitete Text.
+
+Beginne sofort mit dem ersten Wort des bearbeiteten Textes und höre mit dem letzten Wort auf.`;
       } else {
         systemPrompt = `Du bist ein professioneller Texting-Assistent. Deine Aufgabe ist es, den gegebenen Text gemäß der spezifischen Anweisung umzuformen.
 
 Regeln:
-- Gib NUR den umgeformten Text zurück, keine Erklärungen oder zusätzlichen Kommentare
 - Bewahre die ursprüngliche Bedeutung und Absicht soweit möglich
 - Behalte den angemessenen Ton und Stil für den Kontext bei
-- Falls die Anweisung unklar ist, interpretiere sie bestmöglich`;
+- Falls die Anweisung unklar ist, interpretiere sie bestmöglich
+
+WICHTIGE OUTPUT-REGEL:
+Du darfst AUSSCHLIESSLICH den umgeformten Text ausgeben. Keine Einleitungen, keine Erklärungen, keine Kommentare, keine Anführungszeichen, keine Formatierungshinweise - nur der reine, umgeformte Text.
+
+Beginne sofort mit dem ersten Wort des umgeformten Textes und höre mit dem letzten Wort auf.`;
       }
 
-      const userPrompt = `${additionalParams.systemPrompt === 'articulate' ? 'ROHE GEDANKENSTRUKTUR:' : additionalParams.systemPrompt === 'refine' ? 'TEXT ZUM VERFEINERN:' : additionalParams.systemPrompt === 'edit' ? 'TEXT ZUM BEARBEITEN:' : 'Forme diesen Text um:'}
+      const userPrompt = `${additionalParams.systemPrompt === 'articulate' ? 'ROHE GEDANKENSTRUKTUR ZUM TRANSFORMIEREN:' : additionalParams.systemPrompt === 'refine' ? 'TEXT ZUM VERFEINERN:' : additionalParams.systemPrompt === 'edit' ? 'TEXT ZUM BEARBEITEN:' : 'Forme diesen Text um:'}
 "${text}"
 
 ANWEISUNGEN:
 ${instruction}
 
-${additionalParams.context ? `KONTEXT (Gesamter Text im Editor):
-${additionalParams.context}` : ''}
+${additionalParams.context ? `KONTEXT (Gesamter Text im Editor - NUR als Referenz, NICHT bearbeiten):
+${additionalParams.context}
 
-AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere diese rohe Struktur in einen vollständig ausformulierten, fließenden Text.' : additionalParams.systemPrompt === 'refine' ? 'Verfeinere diesen Text durch Verbesserung von Formulierung, Stil und Fluss.' : additionalParams.systemPrompt === 'edit' ? 'Führe die Bearbeitungsanweisung präzise am Text aus.' : 'Forme den Text entsprechend der Anweisung um.'}`;
+WICHTIG: Transformiere AUSSCHLIESSLICH den oben markierten Text ("${additionalParams.systemPrompt === 'articulate' ? 'ROHE GEDANKENSTRUKTUR ZUM TRANSFORMIEREN' : additionalParams.systemPrompt === 'refine' ? 'TEXT ZUM VERFEINERN' : additionalParams.systemPrompt === 'edit' ? 'TEXT ZUM BEARBEITEN' : 'Text'}"). Der Kontext dient nur als Referenz für besseres Verständnis, soll aber NICHT verändert oder mit in die Ausgabe einbezogen werden.` : ''}
+
+AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR die markierte rohe Struktur in einen vollständig ausformulierten, fließenden Text.' : additionalParams.systemPrompt === 'refine' ? 'Verfeinere NUR den markierten Text durch Verbesserung von Formulierung, Stil und Fluss.' : additionalParams.systemPrompt === 'edit' ? 'Führe die Bearbeitungsanweisung präzise NUR am markierten Text aus.' : 'Forme NUR den markierten Text entsprechend der Anweisung um.'}`;
 
       const message = await this.client.messages.create({
         model: this.model,
