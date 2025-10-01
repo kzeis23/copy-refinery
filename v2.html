@@ -1,0 +1,1204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Marked Text Editor (v2)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0b0c0f; --fg: #e7e9ee; --muted: #9aa3b2;
+      --shorten: #ffd166; --elongate: #8ecae6; --simplify: #a3d9a5;
+      --border: #2b2f36; --accent: #7aa2f7; --error: #ff6b6b; --success: #51cf66;
+    }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: var(--bg); color: var(--fg);
+      display: grid; grid-template-rows: auto auto 1fr auto; height: 100vh;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 10px; display: flex; gap: 8px; flex-wrap: wrap;
+      position: sticky; top: 0; background: rgba(11,12,15,0.9); backdrop-filter: blur(6px);
+    }
+    button {
+      border: 1px solid var(--border); background: transparent; color: var(--fg);
+      padding: 8px 10px; border-radius: 8px; cursor: pointer; font-weight: 600;
+      transition: all 0.2s ease;
+    }
+    button:hover { border-color: var(--accent); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-run { background: var(--accent); border-color: var(--accent); color: #0b0c0f; }
+    .btn-clear { color: var(--muted); }
+    .btn-undo, .btn-redo { font-size: 14px; padding: 6px 8px; }
+
+    .model-selector {
+      position: relative;
+      margin-left: 12px;
+    }
+
+    .model-dropdown {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      min-width: 180px;
+    }
+
+    .model-dropdown:hover {
+      border-color: var(--accent);
+    }
+
+    .model-dropdown:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .legend { margin-left: auto; color: var(--muted); font-size: 14px; }
+    #editor {
+      padding: 16px; line-height: 1.6; font-size: 16px; overflow: auto;
+    }
+    #editor:focus { outline: none; }
+
+    /* Inline Popup Styles */
+    .transform-popup {
+      position: absolute;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      z-index: 1000;
+      display: none;
+      min-width: 280px;
+      backdrop-filter: blur(8px);
+      background: rgba(11, 12, 15, 0.95);
+    }
+
+    .transform-popup.active {
+      display: block;
+    }
+
+    .popup-form {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .popup-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .popup-select {
+      flex: 1;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 13px;
+    }
+
+    .popup-input {
+      flex: 2;
+      padding: 6px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 13px;
+      font-family: inherit;
+    }
+
+    .popup-select:focus,
+    .popup-input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .popup-buttons {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .btn-small {
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--fg);
+      cursor: pointer;
+    }
+
+    .btn-small:hover {
+      border-color: var(--accent);
+    }
+
+    .btn-small.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0b0c0f;
+      font-weight: 500;
+    }
+
+    .btn-small.cancel {
+      color: var(--muted);
+    }
+
+    .processing-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      border-radius: 8px;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .processing-overlay.active {
+      display: flex;
+    }
+
+    /* Tab Styles */
+    .style-tab {
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+
+    .tab-header {
+      display: flex;
+      align-items: center;
+      padding: 0 16px;
+    }
+
+    .tab-button {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .tab-button.active {
+      color: var(--fg);
+      border-bottom-color: var(--accent);
+    }
+
+    .tab-button:hover {
+      color: var(--fg);
+    }
+
+    .style-indicator {
+      margin-left: auto;
+      padding: 4px 8px;
+      font-size: 12px;
+      border-radius: 4px;
+      background: var(--border);
+      color: var(--muted);
+    }
+
+    .style-indicator.active {
+      background: var(--accent);
+      color: #0b0c0f;
+    }
+
+    .style-mode-toggle {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      background: var(--border);
+      border-radius: 6px;
+      padding: 4px;
+    }
+
+    .mode-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+    }
+
+    .mode-btn.active {
+      background: var(--accent);
+      color: #0b0c0f;
+    }
+
+    .mode-btn:hover:not(.active) {
+      background: rgba(122, 162, 247, 0.1);
+      color: var(--fg);
+    }
+
+    .style-mode {
+      display: none;
+    }
+
+    .style-mode.active {
+      display: block;
+    }
+
+    .style-guide-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .style-guide-header h3 {
+      margin: 0;
+    }
+
+    .edit-btn {
+      padding: 4px 8px;
+      font-size: 12px;
+      background: var(--border);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .edit-btn:hover {
+      background: var(--accent);
+      color: #0b0c0f;
+      border-color: var(--accent);
+    }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow: auto;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .styling-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 100px;
+      padding: 16px;
+      height: 100%;
+    }
+
+    .styling-form h3,
+    .style-guide-display h3 {
+      margin: 0 0 16px 0;
+      color: var(--fg);
+      font-size: 16px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--fg);
+    }
+
+    .form-group textarea,
+    .form-group input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .form-group textarea:focus,
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .form-buttons {
+      display: flex;
+      margin-bottom: 10px;
+      gap: 8px;
+    }
+
+    .btn-primary,
+    .btn-secondary {
+      padding: 8px 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #0b0c0f;
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--muted);
+    }
+
+    .btn-primary:hover {
+      filter: brightness(1.1);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--accent);
+      color: var(--fg);
+    }
+
+    .style-guide-content {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.02);
+      white-space: pre-wrap;
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 200px;
+    }
+
+    .no-style {
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .style-guide-option {
+      border-top: 1px solid var(--border);
+      padding-top: 8px;
+      margin-top: 4px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--fg);
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      margin-right: 8px;
+    }
+
+    @media (max-width: 1024px) {
+      .styling-container {
+        grid-template-columns: 1fr;
+      }
+    }
+    .status {
+      font-size: 14px; color: var(--muted); padding: 8px 16px;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      transition: all 0.3s ease;
+    }
+    .status.error { color: var(--error); background: color-mix(in oklab, var(--error) 10%, transparent); }
+    .status.success { color: var(--success); }
+    .status-info { display: flex; gap: 12px; font-size: 13px; }
+    .kbd { border: 1px solid var(--border); border-bottom-width: 2px; padding: 1px 6px; border-radius: 6px; }
+    @media (max-width: 640px) { .legend { flex-basis: 100%; order: 2; margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <button class="btn-undo" id="undo" disabled title="Undo (Ctrl+Z)">↶</button>
+    <button class="btn-redo" id="redo" disabled title="Redo (Ctrl+Y)">↷</button>
+
+    <div class="model-selector">
+      <select class="model-dropdown" id="modelSelect">
+        <option value="">Loading models...</option>
+      </select>
+    </div>
+
+    <div class="legend">
+      Tip: select text, press <span class="kbd">Cmd/Ctrl + K</span> to transform. <span class="kbd">Ctrl/⌘ + Z/Y</span> to undo/redo.
+    </div>
+  </header>
+
+  <!-- Style Guide Tab -->
+  <div class="style-tab" id="styleTab">
+    <div class="tab-header">
+      <button class="tab-button active" data-tab="editor">Editor</button>
+      <button class="tab-button" data-tab="styling">Styling</button>
+      <div class="style-indicator" id="styleIndicator">No Style Guide</div>
+    </div>
+  </div>
+
+  <!-- Editor Tab Content -->
+  <div class="tab-content active" id="editorTab">
+    <div id="editor" contenteditable="true" spellcheck="true">
+      Draft your copy here. Select any text, then press Cmd/Ctrl + K to transform it with AI.
+    </div>
+  </div>
+
+  <!-- Styling Tab Content -->
+  <div class="tab-content" id="stylingTab">
+    <div class="styling-container">
+      <div class="styling-form">
+        <h3>Style Guide Creation</h3>
+
+        <!-- Mode Toggle -->
+        <div class="style-mode-toggle">
+          <button id="generateModeBtn" class="mode-btn active" data-mode="generate">Generate from Example</button>
+          <button id="manualModeBtn" class="mode-btn" data-mode="manual">Manual Entry</button>
+        </div>
+
+        <!-- Generate Mode -->
+        <div id="generateMode" class="style-mode active">
+          <div class="form-group">
+            <label for="exampleText">Example Text:</label>
+            <textarea
+              id="exampleText"
+              placeholder="Paste example text that represents your desired writing style..."
+              rows="8"
+            ></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="additionalInstructions">Additional Instructions (optional):</label>
+            <input
+              type="text"
+              id="additionalInstructions"
+              placeholder="e.g., 'Focus on tone', 'Emphasize formality level'..."
+            />
+          </div>
+
+          <div class="form-buttons">
+            <button id="generateStyleBtn" class="btn-primary">Generate Style Guide</button>
+          </div>
+        </div>
+
+        <!-- Manual Mode -->
+        <div id="manualMode" class="style-mode">
+          <div class="form-group">
+            <label for="manualStyleGuide">Style Guide Content:</label>
+            <textarea
+              id="manualStyleGuide"
+              placeholder="Enter your style guide manually. You can write detailed instructions about tone, style, formatting, word choice, etc..."
+              rows="12"
+            ></textarea>
+          </div>
+
+          <div class="form-buttons">
+            <button id="saveManualStyleBtn" class="btn-primary">Save Style Guide</button>
+          </div>
+        </div>
+
+        <!-- Common Actions -->
+        <div class="form-buttons">
+          <button id="clearStyleBtn" class="btn-secondary">Clear Style Guide</button>
+        </div>
+      </div>
+
+      <div class="style-guide-display" id="styleGuideDisplay">
+        <div class="style-guide-header">
+          <h3>Style Guide</h3>
+          <button id="editStyleGuideBtn" class="btn-small edit-btn" style="display: none;">Edit</button>
+        </div>
+        <div class="style-guide-content" id="styleGuideContent">
+          <p class="no-style">No style guide generated yet. Add example text and click "Generate Style Guide" to create one.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inline Transform Popup -->
+  <div class="transform-popup" id="transformPopup">
+    <form class="popup-form" id="transformForm">
+      <div class="popup-row">
+        <select class="popup-select" id="functionSelect" required>
+          <option value="ARTICULATE">Articulate</option>
+          <option value="REFINE">Refine</option>
+          <option value="EDIT">Edit</option>
+        </select>
+        <input
+          type="text"
+          class="popup-input"
+          id="instructionInput"
+          placeholder="Optional instruction..."
+        />
+      </div>
+
+      <div class="popup-row style-guide-option" id="styleGuideOption" style="display: none;">
+        <label class="checkbox-label">
+          <input type="checkbox" id="useStyleGuide" />
+          <span class="checkmark"></span>
+          Pass styling guide
+        </label>
+      </div>
+
+      <div class="popup-buttons">
+        <button type="button" class="btn-small cancel" id="cancelTransform">Cancel</button>
+        <button type="submit" class="btn-small primary">Transform</button>
+      </div>
+    </form>
+    <div class="processing-overlay" id="processingOverlay">
+      <span>Transforming...</span>
+    </div>
+  </div>
+
+  <div class="status" id="status">
+    <span id="status-text">Ready.</span>
+    <div class="status-info">
+      <span id="word-count">0 words</span>
+    </div>
+  </div>
+
+  <script type="module">
+    // Import API functions (frontend client that calls our backend)
+    import { initializeAPI, articulateText, refineText, editText, generateStyleGuide, getModels, setModel } from './api-frontend.js';
+
+    // Initialize API client
+    const apiClient = initializeAPI();
+    const editor = document.getElementById('editor');
+    const statusEl = document.getElementById('status');
+    const statusText = document.getElementById('status-text');
+    const wordCountEl = document.getElementById('word-count');
+    const undoBtn = document.getElementById('undo');
+    const redoBtn = document.getElementById('redo');
+    const modelSelect = document.getElementById('modelSelect');
+
+    // Style Guide Management
+    let currentStyleGuide = null;
+    const styleIndicator = document.getElementById('styleIndicator');
+    const exampleTextArea = document.getElementById('exampleText');
+    const additionalInstructionsInput = document.getElementById('additionalInstructions');
+    const generateStyleBtn = document.getElementById('generateStyleBtn');
+    const clearStyleBtn = document.getElementById('clearStyleBtn');
+    const styleGuideContent = document.getElementById('styleGuideContent');
+    const styleGuideOption = document.getElementById('styleGuideOption');
+    const useStyleGuideCheckbox = document.getElementById('useStyleGuide');
+
+    // Manual editing elements
+    const generateModeBtn = document.getElementById('generateModeBtn');
+    const manualModeBtn = document.getElementById('manualModeBtn');
+    const generateMode = document.getElementById('generateMode');
+    const manualMode = document.getElementById('manualMode');
+    const manualStyleGuideTextarea = document.getElementById('manualStyleGuide');
+    const saveManualStyleBtn = document.getElementById('saveManualStyleBtn');
+    const editStyleGuideBtn = document.getElementById('editStyleGuideBtn');
+
+    // Load style guide from localStorage
+    function loadStyleGuide() {
+      const saved = localStorage.getItem('styleGuide');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+
+          // Handle backward compatibility - if it's a string, convert to object
+          if (typeof parsed === 'string') {
+            currentStyleGuide = {
+              styleGuide: parsed,
+              exampleText: '',
+              additionalInstructions: '',
+              model: 'legacy',
+              timestamp: new Date().toISOString(),
+              isManual: false
+            };
+          } else {
+            currentStyleGuide = parsed;
+          }
+
+          updateStyleGuideDisplay();
+        } catch (e) {
+          console.error('Failed to load style guide:', e);
+          localStorage.removeItem('styleGuide');
+        }
+      }
+    }
+
+    // Save style guide to localStorage
+    function saveStyleGuide() {
+      if (currentStyleGuide) {
+        localStorage.setItem('styleGuide', JSON.stringify(currentStyleGuide));
+      } else {
+        localStorage.removeItem('styleGuide');
+      }
+    }
+
+    // Update style guide display
+
+    // --- History Management ---
+    let history = [];
+    let historyIndex = -1;
+    const MAX_HISTORY = 50;
+
+    function saveState() {
+      // Remove any future history when creating new state
+      history = history.slice(0, historyIndex + 1);
+
+      // Add new state
+      history.push({
+        content: editor.innerHTML,
+        timestamp: Date.now()
+      });
+
+      // Limit history size
+      if (history.length > MAX_HISTORY) {
+        history = history.slice(-MAX_HISTORY);
+      }
+
+      historyIndex = history.length - 1;
+      updateUndoRedoButtons();
+    }
+
+    function undo() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        editor.innerHTML = history[historyIndex].content;
+        updateUndoRedoButtons();
+        updateStats();
+        setStatus('Undone.', 'success');
+      }
+    }
+
+    function redo() {
+      if (historyIndex < history.length - 1) {
+        historyIndex++;
+        editor.innerHTML = history[historyIndex].content;
+        updateUndoRedoButtons();
+        updateStats();
+        setStatus('Redone.', 'success');
+      }
+    }
+
+    function updateUndoRedoButtons() {
+      undoBtn.disabled = historyIndex <= 0;
+      redoBtn.disabled = historyIndex >= history.length - 1;
+    }
+
+    // --- Utilities ---
+    function setStatus(msg, type = 'normal') {
+      statusText.textContent = msg;
+      statusEl.className = 'status';
+      if (type === 'error') statusEl.classList.add('error');
+      if (type === 'success') statusEl.classList.add('success');
+
+      // Auto-clear success/error messages
+      if (type !== 'normal') {
+        setTimeout(() => {
+          if (statusText.textContent === msg) {
+            setStatus('Ready.');
+          }
+        }, 3000);
+      }
+    }
+
+    function updateStats() {
+      const wordCount = editor.textContent.trim().split(/\s+/).filter(w => w.length > 0).length;
+      wordCountEl.textContent = `${wordCount} words`;
+    }
+
+    function getCurrentRangeWithin(node) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+      const range = sel.getRangeAt(0);
+      // Ensure selection is inside the editor
+      if (!editor.contains(range.commonAncestorContainer)) return null;
+      return range;
+    }
+
+    function validateSelection(range) {
+      if (!range || range.collapsed) {
+        return { valid: false, error: 'Please select some text first.' };
+      }
+
+      const text = range.toString().trim();
+      if (!text) {
+        return { valid: false, error: 'Selection contains no text.' };
+      }
+
+      return { valid: true };
+    }
+
+
+
+    // --- Claude API Transformation functions ---
+    const FNS = {
+      ARTICULATE: async (text, instruction = '', context = '', styleGuide = null) => {
+        try {
+          const options = {
+            context: context
+          };
+
+          if (styleGuide) {
+            options.styleGuide = styleGuide;
+          }
+
+          const result = await articulateText(text, options);
+
+          if (result.success) {
+            return result.transformedText;
+          } else {
+            throw new Error(result.error || 'API call failed');
+          }
+        } catch (error) {
+          console.error('ARTICULATE error:', error);
+          throw error;
+        }
+      },
+      REFINE: async (text, instruction = '', context = '', styleGuide = null) => {
+        try {
+          const options = {
+            context: context
+          };
+
+          if (styleGuide) {
+            options.styleGuide = styleGuide;
+          }
+
+          const result = await refineText(text, options);
+
+          if (result.success) {
+            return result.transformedText;
+          } else {
+            throw new Error(result.error || 'API call failed');
+          }
+        } catch (error) {
+          console.error('REFINE error:', error);
+          throw error;
+        }
+      },
+      EDIT: async (text, instruction = '', context = '', styleGuide = null) => {
+        try {
+          if (!instruction.trim()) {
+            throw new Error('EDIT function requires a specific instruction');
+          }
+
+          const options = {
+            context: context
+          };
+
+          if (styleGuide) {
+            options.styleGuide = styleGuide;
+          }
+
+          const result = await editText(text, instruction, options);
+
+          if (result.success) {
+            return result.transformedText;
+          } else {
+            throw new Error(result.error || 'API call failed');
+          }
+        } catch (error) {
+          console.error('EDIT error:', error);
+          throw error;
+        }
+      }
+    };
+
+
+
+    // --- Popup Management ---
+    const transformPopup = document.getElementById('transformPopup');
+    const transformForm = document.getElementById('transformForm');
+    const functionSelect = document.getElementById('functionSelect');
+    const instructionInput = document.getElementById('instructionInput');
+    const cancelBtn = document.getElementById('cancelTransform');
+    const processingOverlay = document.getElementById('processingOverlay');
+
+    let currentSelection = null;
+    let currentRange = null;
+
+    function getSelectionCoordinates(range) {
+      const rect = range.getBoundingClientRect();
+      const editorRect = editor.getBoundingClientRect();
+
+      return {
+        x: rect.left - editorRect.left + editor.scrollLeft,
+        y: rect.bottom - editorRect.top + editor.scrollTop + 8
+      };
+    }
+
+    function showTransformPopup() {
+      const range = getCurrentRangeWithin(editor);
+      const validation = validateSelection(range);
+
+      if (!validation.valid) {
+        setStatus(validation.error, 'error');
+        return;
+      }
+
+      // Store the selection and range
+      currentSelection = range.toString();
+      currentRange = range.cloneRange();
+
+      // Position popup near selection
+      const coords = getSelectionCoordinates(range);
+      transformPopup.style.left = coords.x + 'px';
+      transformPopup.style.top = coords.y + 'px';
+
+      // Reset form
+      functionSelect.value = 'ARTICULATE';
+      instructionInput.value = '';
+      instructionInput.placeholder = 'Optional instruction...';
+
+      // Show popup
+      transformPopup.classList.add('active');
+      functionSelect.focus();
+    }
+
+    function hideTransformPopup() {
+      transformPopup.classList.remove('active');
+      processingOverlay.classList.remove('active');
+      currentSelection = null;
+      currentRange = null;
+    }
+
+    async function handleTransformSubmit(e) {
+      e.preventDefault();
+
+      if (!currentSelection || !currentRange) {
+        setStatus('No selection available.', 'error');
+        return;
+      }
+
+      const fnName = functionSelect.value;
+      const instruction = instructionInput.value.trim();
+
+      // Show processing state
+      processingOverlay.classList.add('active');
+
+      try {
+        // Save state before transformation
+        saveState();
+
+        // Get the transformation function
+        const fn = FNS[fnName];
+        if (!fn) {
+          throw new Error(`Unknown transformation: ${fnName}`);
+        }
+
+        // Apply transformation with full editor context and optional style guide
+        const fullContext = editor.textContent || editor.innerText || '';
+        const useStyle = useStyleGuideCheckbox.checked && currentStyleGuide;
+        const result = await fn(currentSelection, instruction, fullContext, useStyle ? currentStyleGuide : null);
+
+        // Replace the selected text with transformed result
+        currentRange.deleteContents();
+        const textNode = document.createTextNode(result);
+        currentRange.insertNode(textNode);
+
+        // Clear selection and normalize
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        editor.normalize();
+
+        updateStats();
+        setStatus(`Text transformed using ${fnName}.`, 'success');
+        hideTransformPopup();
+      } catch (error) {
+        setStatus(`Error: ${error.message}`, 'error');
+        console.error('Transform error:', error);
+        processingOverlay.classList.remove('active');
+      }
+    }
+
+    // --- Tab Management ---
+    document.querySelectorAll('.tab-button').forEach(button => {
+      button.addEventListener('click', (e) => {
+        const targetTab = e.target.getAttribute('data-tab');
+
+        // Update tab buttons
+        document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+        e.target.classList.add('active');
+
+        // Update tab content
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+        if (targetTab === 'editor') {
+          document.getElementById('editorTab').classList.add('active');
+        } else if (targetTab === 'styling') {
+          document.getElementById('stylingTab').classList.add('active');
+        }
+      });
+    });
+
+    // --- Style Guide Events ---
+    generateStyleBtn.addEventListener('click', async () => {
+      const exampleText = exampleTextArea.value.trim();
+      const additionalInstructions = additionalInstructionsInput.value.trim();
+
+      if (!exampleText) {
+        setStatus('Please enter example text first.', 'error');
+        return;
+      }
+
+      generateStyleBtn.disabled = true;
+      generateStyleBtn.textContent = 'Generating...';
+      setStatus('Generating style guide...');
+
+      try {
+        const result = await generateStyleGuide(exampleText, additionalInstructions);
+
+        if (result.success) {
+          currentStyleGuide = result; // Save the full result object
+          saveStyleGuide();
+          updateStyleGuideDisplay();
+          setStatus('Style guide generated successfully!', 'success');
+        } else {
+          throw new Error(result.error || 'Failed to generate style guide');
+        }
+      } catch (error) {
+        setStatus(`Error generating style guide: ${error.message}`, 'error');
+        console.error('Style guide generation error:', error);
+      } finally {
+        generateStyleBtn.disabled = false;
+        generateStyleBtn.textContent = 'Generate Style Guide';
+      }
+    });
+
+    clearStyleBtn.addEventListener('click', () => {
+      currentStyleGuide = null;
+      saveStyleGuide();
+      updateStyleGuideDisplay();
+      exampleTextArea.value = '';
+      additionalInstructionsInput.value = '';
+      manualStyleGuideTextarea.value = '';
+      setStatus('Style guide cleared.', 'success');
+    });
+
+    // Mode switching functionality
+    function switchToMode(mode) {
+      // Update button states
+      generateModeBtn.classList.toggle('active', mode === 'generate');
+      manualModeBtn.classList.toggle('active', mode === 'manual');
+
+      // Update mode visibility
+      generateMode.classList.toggle('active', mode === 'generate');
+      manualMode.classList.toggle('active', mode === 'manual');
+    }
+
+    generateModeBtn.addEventListener('click', () => switchToMode('generate'));
+    manualModeBtn.addEventListener('click', () => switchToMode('manual'));
+
+    // Edit button functionality
+    editStyleGuideBtn.addEventListener('click', () => {
+      // Switch to manual mode
+      switchToMode('manual');
+
+      // Populate the manual textarea with the current style guide content
+      if (currentStyleGuide) {
+        manualStyleGuideTextarea.value = currentStyleGuide.styleGuide;
+      }
+    });
+
+    // Manual style guide saving
+    saveManualStyleBtn.addEventListener('click', () => {
+      const manualStyleGuideText = manualStyleGuideTextarea.value.trim();
+
+      if (!manualStyleGuideText) {
+        setStatus('Please enter a style guide first.', 'error');
+        return;
+      }
+
+      // Create style guide object
+      currentStyleGuide = {
+        styleGuide: manualStyleGuideText,
+        exampleText: '', // No example text for manual entry
+        additionalInstructions: '',
+        model: 'manual', // Indicate this was manually created
+        timestamp: new Date().toISOString(),
+        isManual: true
+      };
+
+      saveStyleGuide();
+      updateStyleGuideDisplay();
+      setStatus('Style guide saved successfully!', 'success');
+    });
+
+    // Enhanced updateStyleGuideDisplay to handle manual content
+    function updateStyleGuideDisplay() {
+      if (currentStyleGuide) {
+        // Determine what to display based on style guide structure
+        let displayContent = '';
+        if (currentStyleGuide.fullResponse) {
+          // New dual style guide format
+          displayContent = currentStyleGuide.fullResponse.replace(/\n/g, '<br>');
+        } else if (currentStyleGuide.styleGuide) {
+          // Legacy or manual format
+          displayContent = currentStyleGuide.styleGuide.replace(/\n/g, '<br>');
+        }
+
+        styleGuideContent.innerHTML = `
+          <div class="style-guide-text">
+            ${displayContent}
+          </div>
+          <div class="style-guide-meta">
+            <small>
+              ${currentStyleGuide.isManual ? 'Manually created' : `Generated from example text using ${currentStyleGuide.model}`}
+              on ${new Date(currentStyleGuide.timestamp).toLocaleDateString()}
+              ${currentStyleGuide.comprehensiveGuide && currentStyleGuide.conciseGuide ?
+                '<br><strong>Dual guides:</strong> Comprehensive for ARTICULATE, Concise for REFINE/EDIT' : ''}
+            </small>
+          </div>
+        `;
+        styleIndicator.textContent = 'Style Guide Active';
+        styleIndicator.classList.add('active');
+        styleGuideOption.style.display = 'flex';
+        editStyleGuideBtn.style.display = 'inline-block';
+
+        // If viewing manual mode and we have a manual style guide, populate the textarea
+        if (currentStyleGuide.isManual && manualMode.classList.contains('active')) {
+          manualStyleGuideTextarea.value = currentStyleGuide.styleGuide;
+        }
+      } else {
+        styleGuideContent.innerHTML = '<p class="no-style">No style guide generated yet. Add example text and click "Generate Style Guide" to create one.</p>';
+        styleIndicator.textContent = 'No Style Guide';
+        styleIndicator.classList.remove('active');
+        styleGuideOption.style.display = 'none';
+        editStyleGuideBtn.style.display = 'none';
+        useStyleGuideCheckbox.checked = false;
+      }
+    }
+
+    // Override the original updateStyleGuideDisplay since we enhanced it
+    // (Remove the old one from where it was defined)
+
+    // --- Events ---
+    document.addEventListener('click', (e) => {
+      // Hide popup when clicking outside
+      if (!transformPopup.contains(e.target)) {
+        hideTransformPopup();
+      }
+    });
+
+    // Remove old event listeners for run/clear buttons
+    undoBtn.addEventListener('click', undo);
+    redoBtn.addEventListener('click', redo);
+
+    // Popup event listeners
+    transformForm.addEventListener('submit', handleTransformSubmit);
+    cancelBtn.addEventListener('click', hideTransformPopup);
+
+    // Update instruction field based on function selection
+    functionSelect.addEventListener('change', (e) => {
+      if (e.target.value === 'EDIT') {
+        instructionInput.required = true;
+        instructionInput.placeholder = 'Enter editing instruction...';
+      } else {
+        instructionInput.required = false;
+        instructionInput.placeholder = 'Optional instruction...';
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      // Cmd/Ctrl + K to show transform popup
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        showTransformPopup();
+      }
+
+      // Escape to close popup
+      if (e.key === 'Escape' && transformPopup.classList.contains('active')) {
+        e.preventDefault();
+        hideTransformPopup();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        e.preventDefault();
+        redo();
+      }
+    });
+
+    // Update stats on editor changes
+    editor.addEventListener('input', updateStats);
+
+    // Model Selection Management
+    async function loadModels() {
+      try {
+        const result = await getModels();
+        if (result.success) {
+          // Clear loading option
+          modelSelect.innerHTML = '';
+
+          // Add models to dropdown
+          Object.entries(result.models).forEach(([modelId, modelInfo]) => {
+            const option = document.createElement('option');
+            option.value = modelId;
+            option.textContent = `${modelInfo.name}${modelInfo.recommended ? ' ⭐' : ''}${modelInfo.premium ? ' 💎' : ''}${modelInfo.fast ? ' ⚡' : ''}`;
+            option.title = `${modelInfo.description} - ${modelInfo.pricing}`;
+
+            // Mark current model as selected
+            if (modelId === result.currentModel.id) {
+              option.selected = true;
+            }
+
+            modelSelect.appendChild(option);
+          });
+        } else {
+          // Error loading models
+          modelSelect.innerHTML = '<option value="">Error loading models</option>';
+          console.error('Failed to load models:', result.error);
+        }
+      } catch (error) {
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+        console.error('Failed to load models:', error);
+      }
+    }
+
+    // Handle model selection changes
+    modelSelect.addEventListener('change', async (e) => {
+      const selectedModelId = e.target.value;
+      if (selectedModelId) {
+        try {
+          const result = await setModel(selectedModelId);
+          if (result.success) {
+            console.log('Model changed to:', result.currentModel.name);
+          } else {
+            console.error('Failed to change model:', result.error);
+            // Revert selection
+            await loadModels();
+          }
+        } catch (error) {
+          console.error('Failed to change model:', error);
+          // Revert selection
+          await loadModels();
+        }
+      }
+    });
+
+    // Initialize
+    loadStyleGuide(); // Load saved style guide
+    loadModels(); // Load available models
+    saveState(); // Save initial state
+    updateStats();
+    setStatus('Ready. Select text, mark it, then Run.');
+  </script>
+</body>
+</html>

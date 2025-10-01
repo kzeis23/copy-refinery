@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Marked Text Editor (Minimal)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0b0c0f; --fg: #e7e9ee; --muted: #9aa3b2;
+      --shorten: #ffd166; --elongate: #8ecae6; --simplify: #a3d9a5;
+      --border: #2b2f36; --accent: #7aa2f7;
+    }
+    body {
+      margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      background: var(--bg); color: var(--fg);
+      display: grid; grid-template-rows: auto 1fr; height: 100vh;
+    }
+    header {
+      border-bottom: 1px solid var(--border);
+      padding: 10px; display: flex; gap: 8px; flex-wrap: wrap;
+      position: sticky; top: 0; background: rgba(11,12,15,0.9); backdrop-filter: blur(6px);
+    }
+    button {
+      border: 1px solid var(--border); background: transparent; color: var(--fg);
+      padding: 8px 10px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    button:hover { border-color: var(--accent); }
+    .btn-run { background: var(--accent); border-color: var(--accent); color: #0b0c0f; }
+    .btn-clear { color: var(--muted); }
+    .legend { margin-left: auto; color: var(--muted); font-size: 14px; }
+    #editor {
+      padding: 16px; line-height: 1.6; font-size: 16px; overflow: auto;
+    }
+    #editor:focus { outline: none; }
+    .mark {
+      padding: 0 2px; border-radius: 4px; box-decoration-break: clone;
+    }
+    .mark[data-fn="SHORTEN"]  { background: color-mix(in oklab, var(--shorten) 25%, transparent); outline: 1px dashed var(--shorten); }
+    .mark[data-fn="ELONGATE"] { background: color-mix(in oklab, var(--elongate) 20%, transparent); outline: 1px dashed var(--elongate); }
+    .mark[data-fn="SIMPLIFY"] { background: color-mix(in oklab, var(--simplify) 20%, transparent); outline: 1px dashed var(--simplify); }
+    .mark.done { outline-style: solid; opacity: 0.95; }
+    .status { font-size: 14px; color: var(--muted); padding: 8px 16px; border-top: 1px solid var(--border); }
+    .kbd { border: 1px solid var(--border); border-bottom-width: 2px; padding: 1px 6px; border-radius: 6px; }
+    @media (max-width: 640px) { .legend { flex-basis: 100%; order: 2; margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <header>
+    <button data-action="mark" data-fn="SHORTEN">Mark: SHORTEN</button>
+    <button data-action="mark" data-fn="ELONGATE">Mark: ELONGATE</button>
+    <button data-action="mark" data-fn="SIMPLIFY">Mark: SIMPLIFY</button>
+    <button class="btn-run" id="run">▶ Run all marks</button>
+    <button class="btn-clear" id="clear">Clear all marks</button>
+    <div class="legend">
+      Tip: select text, then click a mark. Run with <span class="kbd">Ctrl/⌘ + Enter</span>.
+    </div>
+  </header>
+
+  <div id="editor" contenteditable="true" spellcheck="true">
+    Draft your copy here. Select any passage, then click “Mark: SHORTEN / ELONGATE / SIMPLIFY”.
+    After marking multiple spots, click “Run all marks”.
+  </div>
+
+  <div class="status" id="status">Ready.</div>
+
+  <script>
+    const editor = document.getElementById('editor');
+    const statusEl = document.getElementById('status');
+
+    // --- Utilities ---
+    const setStatus = (msg) => { statusEl.textContent = msg; };
+
+    function getCurrentRangeWithin(node) {
+      const sel = window.getSelection();
+      if (!sel || sel.rangeCount === 0) return null;
+      const range = sel.getRangeAt(0);
+      // Ensure selection is inside the editor
+      if (!editor.contains(range.commonAncestorContainer)) return null;
+      return range;
+    }
+
+    function wrapSelectionAsMark(fnName) {
+      const range = getCurrentRangeWithin(editor);
+      if (!range || range.collapsed) { setStatus('Select some text first.'); return; }
+
+      // If selection partially intersects existing marks, we clone contents to avoid DOM exceptions.
+      const extracted = range.cloneContents();
+      if (!extracted || !extracted.textContent.trim()) { setStatus('Empty selection.'); return; }
+
+      // Create the wrapper
+      const span = document.createElement('span');
+      span.className = 'mark';
+      span.setAttribute('data-fn', fnName);
+      span.appendChild(extracted);
+
+      // Replace the selection with our wrapped version
+      range.deleteContents();
+      range.insertNode(span);
+
+      // Normalize selection to after the inserted node
+      const after = document.createTextNode('');
+      span.after(after);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      const r = document.createRange();
+      r.setStartAfter(after); r.collapse(true);
+      sel.addRange(r);
+
+      setStatus(`Marked selection as ${fnName}.`);
+    }
+
+    // --- Transformation functions (demo implementations) ---
+    // NOTE: In a real app, you'd swap these for calls to your LLM/backend.
+    const FNS = {
+      SHORTEN: (text) => {
+        // Simple heuristic: compress to ~60% of words, keep punctuation
+        const words = text.split(/\s+/);
+        const target = Math.max(4, Math.round(words.length * 0.6));
+        return words.slice(0, target).join(' ')
+          .replace(/\s+([,.;!?])/g, '$1')
+          .trim();
+      },
+      ELONGATE: (text) => {
+        // Simple heuristic: lightly elaborate each sentence with a soft intensifier.
+        return text.split(/([.?!]\s+)/).map(chunk => {
+          if (/^[.?!]\s*$/.test(chunk)) return chunk;
+          if (!chunk.trim()) return chunk;
+          return chunk.replace(/\b(is|are|was|were|be|seems|feels)\b/i, '$1 truly')
+                      .replace(/\b(very|really)\b/ig, 'remarkably');
+        }).join('').replace(/\s+([,.;!?])/g, '$1');
+      },
+      SIMPLIFY: (text) => {
+        // Replace a few common complex words; split long sentences.
+        const map = {
+          'utilize': 'use',
+          'leverage': 'use',
+          'facilitate': 'help',
+          'commence': 'start',
+          'endeavor': 'try',
+          'approximately': 'about',
+          'consequently': 'so',
+          'subsequently': 'then',
+          'in order to': 'to'
+        };
+        let out = text;
+        for (const [k, v] of Object.entries(map)) {
+          const re = new RegExp(`\\b${k}\\b`, 'ig');
+          out = out.replace(re, v);
+        }
+        // Break overly long sentences crudely at commas.
+        out = out.replace(/,([^,]{40,})/g, '. $1');
+        return out.replace(/\s+([,.;!?])/g, '$1').trim();
+      }
+    };
+
+    async function runAllMarks() {
+      const marks = Array.from(editor.querySelectorAll('.mark'));
+      if (marks.length === 0) { setStatus('No marks to run.'); return; }
+
+      let processed = 0;
+      for (const mark of marks) {
+        const fnName = mark.getAttribute('data-fn');
+        const fn = FNS[fnName];
+        if (!fn) continue;
+
+        const original = mark.textContent;
+        // Simulate async (e.g., calling your backend/LLM)
+        const result = await Promise.resolve(fn(original));
+        // Replace content and mark as done
+        mark.textContent = result;
+        mark.classList.add('done');
+        processed++;
+      }
+      setStatus(`Processed ${processed} marked segment${processed === 1 ? '' : 's'}.`);
+    }
+
+    function clearAllMarks() {
+      const marks = Array.from(editor.querySelectorAll('.mark'));
+      for (const m of marks) {
+        // unwrap: replace the span with its text nodes
+        const parent = m.parentNode;
+        while (m.firstChild) parent.insertBefore(m.firstChild, m);
+        parent.removeChild(m);
+      }
+      setStatus('Cleared all marks.');
+    }
+
+    // --- Events ---
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-action="mark"]');
+      if (btn) {
+        wrapSelectionAsMark(btn.getAttribute('data-fn'));
+      }
+    });
+    document.getElementById('run').addEventListener('click', runAllMarks);
+    document.getElementById('clear').addEventListener('click', clearAllMarks);
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault(); runAllMarks();
+      }
+    });
+
+    setStatus('Ready. Select text, mark it, then Run.');
+  </script>
+</body>
+</html>
+
