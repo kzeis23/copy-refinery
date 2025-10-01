@@ -223,7 +223,7 @@ AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR d
 
       const message = await this.client.messages.create({
         model: this.model,
-        max_tokens: this.defaultParams.max_tokens,
+        max_tokens: additionalParams.max_tokens || this.defaultParams.max_tokens,
         temperature: additionalParams.temperature || this.defaultParams.temperature,
         system: systemPrompt,
         messages: [
@@ -266,7 +266,8 @@ AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR d
 
     return await this.transform(text, instruction, {
       ...additionalParams,
-      systemPrompt: 'articulate'
+      systemPrompt: 'articulate',
+      max_tokens: 8000 // Much higher limit for long articulation tasks
     });
   }
 
@@ -278,7 +279,8 @@ AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR d
 
     return await this.transform(text, instruction, {
       ...additionalParams,
-      systemPrompt: 'refine'
+      systemPrompt: 'refine',
+      max_tokens: 8000 // Much higher limit for long refinement tasks
     });
   }
 
