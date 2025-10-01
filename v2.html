@@ -949,6 +949,9 @@
         sel.removeAllRanges();
         editor.normalize();
 
+        // Save the new state after transformation
+        saveState();
+
         updateStats();
         setStatus(`Text transformed using ${fnName}.`, 'success');
         hideTransformPopup();
@@ -1171,9 +1174,16 @@
     });
 
 
-    // Simple stats update on content change
+    // Simple stats update on content change with debounced state saving
+    let saveStateTimeout;
     editor.addEventListener('input', () => {
       updateStats();
+
+      // Save state after a short delay (debounced)
+      clearTimeout(saveStateTimeout);
+      saveStateTimeout = setTimeout(() => {
+        saveState();
+      }, 1000); // Save state 1 second after user stops typing
     });
 
     // Simple paste handler - just insert plain text
