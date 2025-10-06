@@ -1,9 +1,10 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { TextTransformAPI } from './api.js';
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Initialize Claude API
 const claudeAPI = new TextTransformAPI();

@@ -31,6 +31,38 @@
     .btn-clear { color: var(--muted); }
     .btn-undo, .btn-redo { font-size: 14px; padding: 6px 8px; }
 
+    .mode-toggle {
+      display: flex;
+      gap: 2px;
+      background: var(--border);
+      border-radius: 6px;
+      padding: 2px;
+      margin-left: 16px;
+    }
+
+    .mode-toggle-btn {
+      padding: 6px 12px;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+
+    .mode-toggle-btn.active {
+      background: var(--accent);
+      color: #0b0c0f;
+    }
+
+    .mode-toggle-btn:hover:not(.active) {
+      background: rgba(122, 162, 247, 0.1);
+      color: var(--fg);
+    }
+
     .model-selector {
       position: relative;
       margin-left: 12px;
@@ -469,6 +501,11 @@
     <button class="btn-undo" id="undo" disabled title="Undo (Ctrl+Z)">↶</button>
     <button class="btn-redo" id="redo" disabled title="Redo (Ctrl+Y)">↷</button>
 
+    <div class="mode-toggle">
+      <button id="textModeBtn" class="mode-toggle-btn active" data-mode="text">Text Mode</button>
+      <button id="jsonModeBtn" class="mode-toggle-btn" data-mode="json">JSON Template Mode</button>
+    </div>
+
     <div class="model-selector">
       <select class="model-dropdown" id="modelSelect">
         <option value="">Loading models...</option>
@@ -623,6 +660,11 @@
     const redoBtn = document.getElementById('redo');
     const modelSelect = document.getElementById('modelSelect');
 
+    // Mode toggle elements
+    const textModeBtn = document.getElementById('textModeBtn');
+    const jsonModeBtn = document.getElementById('jsonModeBtn');
+    let currentMode = 'text'; // 'text' or 'json'
+
     // Style Guide Management
     let currentStyleGuide = null;
     const styleIndicator = document.getElementById('styleIndicator');
@@ -683,53 +725,77 @@
 
     // Update style guide display
 
-    // --- History Management ---
-    let history = [];
-    let historyIndex = -1;
-    const MAX_HISTORY = 50;
-
-    function saveState() {
-      // Remove any future history when creating new state
-      history = history.slice(0, historyIndex + 1);
-
-      // Add new state
-      history.push({
-        content: editor.innerHTML,
-        timestamp: Date.now()
-      });
-
-      // Limit history size
-      if (history.length > MAX_HISTORY) {
-        history = history.slice(-MAX_HISTORY);
-      }
-
-      historyIndex = history.length - 1;
-      updateUndoRedoButtons();
-    }
+    // --- Multi-level Undo ---
+    let undoStack = [];
+    let redoStack = [];
+    const MAX_UNDO_LEVELS = 20;
 
     function undo() {
-      if (historyIndex > 0) {
-        historyIndex--;
-        editor.innerHTML = history[historyIndex].content;
-        updateUndoRedoButtons();
+      console.log('🔄 UNDO CALLED');
+      console.log('🔄 undoStack length:', undoStack.length);
+
+      if (undoStack.length > 0) {
+        console.log('🔄 RESTORING FROM STACK');
+
+        // Push current state to redo stack
+        redoStack.push(editor.innerHTML);
+
+        // Pop and restore previous state
+        const previousState = undoStack.pop();
+        editor.innerHTML = previousState;
+
         updateStats();
-        setStatus('Undone.', 'success');
+        setStatus(`Undone. ${undoStack.length} more undos available.`, 'success');
+        console.log('🔄 UNDO COMPLETE, stack now has:', undoStack.length);
+
+        // Update button states
+        undoBtn.disabled = undoStack.length === 0;
+        redoBtn.disabled = false;
+      } else {
+        console.log('🔄 NO SAVED STATE TO RESTORE');
+        setStatus('Nothing to undo.', 'error');
       }
     }
 
     function redo() {
-      if (historyIndex < history.length - 1) {
-        historyIndex++;
-        editor.innerHTML = history[historyIndex].content;
-        updateUndoRedoButtons();
+      console.log('🔄 REDO CALLED');
+      console.log('🔄 redoStack length:', redoStack.length);
+
+      if (redoStack.length > 0) {
+        // Push current state to undo stack
+        undoStack.push(editor.innerHTML);
+
+        // Pop and restore next state
+        const nextState = redoStack.pop();
+        editor.innerHTML = nextState;
+
         updateStats();
-        setStatus('Redone.', 'success');
+        setStatus(`Redone. ${redoStack.length} more redos available.`, 'success');
+
+        // Update button states
+        undoBtn.disabled = false;
+        redoBtn.disabled = redoStack.length === 0;
       }
     }
 
-    function updateUndoRedoButtons() {
-      undoBtn.disabled = historyIndex <= 0;
-      redoBtn.disabled = historyIndex >= history.length - 1;
+    function saveStateBeforeChange() {
+      console.log('💾 SAVING STATE BEFORE CHANGE');
+      console.log('💾 Current content:', editor.innerHTML.substring(0, 100) + '...');
+
+      // Add current state to undo stack
+      undoStack.push(editor.innerHTML);
+
+      // Clear redo stack (new change invalidates redo)
+      redoStack = [];
+
+      // Limit stack size
+      if (undoStack.length > MAX_UNDO_LEVELS) {
+        undoStack.shift(); // Remove oldest
+      }
+
+      undoBtn.disabled = false;
+      redoBtn.disabled = true;
+      console.log('💾 STATE SAVED, stack now has:', undoStack.length);
     }
 
     // --- Utilities ---
@@ -752,6 +818,93 @@
     function updateStats() {
       const wordCount = editor.textContent.trim().split(/\s+/).filter(w => w.length > 0).length;
       wordCountEl.textContent = `${wordCount} words`;
+    }
+
+    // Mode switching functionality
+    function switchMode(mode) {
+      currentMode = mode;
+
+      // Update button states
+      textModeBtn.classList.toggle('active', mode === 'text');
+      jsonModeBtn.classList.toggle('active', mode === 'json');
+
+      // Update editor placeholder
+      if (mode === 'json') {
+        if (editor.textContent.trim() === 'Draft your copy here. Select any text, then press Cmd/Ctrl + K to transform it with AI.') {
+          editor.innerHTML = 'Paste your JSON template here. Select any copy text within the JSON, then press Cmd/Ctrl + K to transform it with AI.';
+        }
+      } else {
+        if (editor.textContent.trim() === 'Paste your JSON template here. Select any copy text within the JSON, then press Cmd/Ctrl + K to transform it with AI.') {
+          editor.innerHTML = 'Draft your copy here. Select any text, then press Cmd/Ctrl + K to transform it with AI.';
+        }
+      }
+
+      setStatus(`Switched to ${mode === 'json' ? 'JSON Template' : 'Text'} mode.`, 'success');
+    }
+
+    // JSON copy extraction utility
+    function extractCopyFromJSON(jsonString, selectedText) {
+      // This function identifies if the selected text is marketing copy vs technical content
+      // We'll use heuristics to determine if text is copy content
+
+      console.log('🧪 COPY DETECTION DEBUG:');
+      console.log('📝 Analyzing text:', `"${selectedText}"`);
+
+      try {
+        JSON.parse(jsonString); // Validate JSON
+        console.log('✅ Valid JSON detected');
+
+        // Common copy fields in advertorial JSON templates
+        const copyFields = [
+          'headline', 'title', 'description', 'content', 'text', 'copy',
+          'subheadline', 'subtitle', 'body', 'summary', 'excerpt',
+          'call_to_action', 'cta_text', 'button_text', 'tagline',
+          'value_proposition', 'benefit', 'feature_description'
+        ];
+
+        // Individual test results
+        const tests = {
+          meaningfulLength: selectedText.length > 10,
+          containsLetters: /[a-zA-Z]/.test(selectedText),
+          notJustNumbers: !/^[0-9]+$/.test(selectedText.trim()),
+          notBoolean: !/^(true|false)$/i.test(selectedText.trim()),
+          notNull: !/^(null|undefined)$/i.test(selectedText.trim()),
+          notHexColor: !/^#[0-9a-fA-F]{3,6}$/.test(selectedText.trim()),
+          notURL: !/^https?:\/\//.test(selectedText.trim()),
+          notFilename: !/^\w+\.\w+/.test(selectedText.trim()),
+          notSingleIdentifier: !/^[\w-]+$/.test(selectedText.trim()),
+          multipleWords: selectedText.split(' ').length > 2
+        };
+
+        console.log('🧪 Individual tests:', tests);
+
+        // Check if selected text appears to be copy content
+        const isCopyLike = tests.meaningfulLength &&
+          tests.containsLetters &&
+          tests.notJustNumbers &&
+          tests.notBoolean &&
+          tests.notNull &&
+          tests.notHexColor &&
+          tests.notURL &&
+          tests.notFilename &&
+          (tests.notSingleIdentifier || tests.multipleWords);
+
+        console.log('🎯 Copy-like result:', isCopyLike);
+        console.log('📊 Word count:', selectedText.split(' ').length);
+        console.log('📏 Character count:', selectedText.length);
+
+        const result = {
+          isCopy: isCopyLike,
+          confidence: isCopyLike ? 0.8 : 0.2
+        };
+
+        console.log('🏁 Final analysis:', result);
+        return result;
+      } catch (e) {
+        // If JSON is invalid, treat as regular text
+        console.log('❌ Invalid JSON, treating as regular text');
+        return { isCopy: true, confidence: 0.9 };
+      }
     }
 
     function getCurrentRangeWithin(node) {
@@ -780,10 +933,11 @@
 
     // --- Claude API Transformation functions ---
     const FNS = {
-      ARTICULATE: async (text, instruction = '', context = '', styleGuide = null) => {
+      ARTICULATE: async (text, instruction = '', context = '', styleGuide = null, mode = 'text') => {
         try {
           const options = {
-            context: context
+            context: context,
+            mode: mode
           };
 
           if (styleGuide) {
@@ -802,10 +956,11 @@
           throw error;
         }
       },
-      REFINE: async (text, instruction = '', context = '', styleGuide = null) => {
+      REFINE: async (text, instruction = '', context = '', styleGuide = null, mode = 'text') => {
         try {
           const options = {
-            context: context
+            context: context,
+            mode: mode
           };
 
           if (styleGuide) {
@@ -824,14 +979,15 @@
           throw error;
         }
       },
-      EDIT: async (text, instruction = '', context = '', styleGuide = null) => {
+      EDIT: async (text, instruction = '', context = '', styleGuide = null, mode = 'text') => {
         try {
           if (!instruction.trim()) {
             throw new Error('EDIT function requires a specific instruction');
           }
 
           const options = {
-            context: context
+            context: context,
+            mode: mode
           };
 
           if (styleGuide) {
@@ -888,6 +1044,34 @@
       currentSelection = range.toString();
       currentRange = range.cloneRange();
 
+      console.log('🔍 SELECTION DEBUG:');
+      console.log('📝 Selected text:', `"${currentSelection}"`);
+      console.log('📏 Selection length:', currentSelection.length);
+      console.log('🏷️ Current mode:', currentMode);
+
+      // Additional validation for JSON mode
+      if (currentMode === 'json') {
+        const fullContent = editor.textContent || editor.innerText || '';
+        console.log('📄 Full editor content length:', fullContent.length);
+        console.log('📄 Full editor content preview:', fullContent.substring(0, 200) + '...');
+
+        const copyAnalysis = extractCopyFromJSON(fullContent, currentSelection);
+        console.log('🎯 Copy analysis result:', copyAnalysis);
+        console.log('✅ Is copy?', copyAnalysis.isCopy);
+        console.log('📊 Confidence:', copyAnalysis.confidence);
+
+        if (!copyAnalysis.isCopy) {
+          console.log('❌ Rejected: Text doesn\'t appear to be copy content');
+          setStatus('Selected text doesn\'t appear to be copy content. Please select marketing copy text.', 'error');
+          return;
+        }
+
+        if (copyAnalysis.confidence < 0.5) {
+          console.log('⚠️ Warning: Low confidence copy detection');
+          setStatus('Warning: Selected text may not be copy content. Proceed with caution.', 'error');
+        }
+      }
+
       // Position popup near selection
       const coords = getSelectionCoordinates(range);
       transformPopup.style.left = coords.x + 'px';
@@ -926,7 +1110,7 @@
 
       try {
         // Save state before transformation
-        saveState();
+        saveStateBeforeChange();
 
         // Get the transformation function
         const fn = FNS[fnName];
@@ -937,7 +1121,22 @@
         // Apply transformation with full editor context and optional style guide
         const fullContext = editor.textContent || editor.innerText || '';
         const useStyle = useStyleGuideCheckbox.checked && currentStyleGuide;
-        const result = await fn(currentSelection, instruction, fullContext, useStyle ? currentStyleGuide : null);
+
+        console.log('🚀 TRANSFORMATION DEBUG:');
+        console.log('🎯 Function:', fnName);
+        console.log('📝 Text to transform:', `"${currentSelection}"`);
+        console.log('📋 Instruction:', `"${instruction}"`);
+        console.log('📄 Full context length:', fullContext.length);
+        console.log('📄 Full context preview:', fullContext.substring(0, 300) + '...');
+        console.log('🎨 Using style guide:', useStyle);
+        console.log('🏷️ Mode:', currentMode);
+
+        const result = await fn(currentSelection, instruction, fullContext, useStyle ? currentStyleGuide : null, currentMode);
+
+        console.log('✅ Transformation result:', result);
+        console.log('📤 Original text:', `"${currentSelection}"`);
+        console.log('📥 Transformed text:', `"${result}"`);
+        console.log('🔄 Length change:', `${currentSelection.length} → ${result.length} (${result.length - currentSelection.length > 0 ? '+' : ''}${result.length - currentSelection.length})`);
 
         // Replace the selected text with transformed result
         currentRange.deleteContents();
@@ -948,9 +1147,6 @@
         const sel = window.getSelection();
         sel.removeAllRanges();
         editor.normalize();
-
-        // Save the new state after transformation
-        saveState();
 
         updateStats();
         setStatus(`Text transformed using ${fnName}.`, 'success');
@@ -1130,9 +1326,16 @@
       }
     });
 
-    // Remove old event listeners for run/clear buttons
-    undoBtn.addEventListener('click', undo);
-    redoBtn.addEventListener('click', redo);
+    // Undo/Redo event listeners with debugging
+    undoBtn.addEventListener('click', () => {
+      console.log('🖱️ UNDO BUTTON CLICKED');
+      undo();
+    });
+
+    redoBtn.addEventListener('click', () => {
+      console.log('🖱️ REDO BUTTON CLICKED');
+      redo();
+    });
 
     // Popup event listeners
     transformForm.addEventListener('submit', handleTransformSubmit);
@@ -1150,8 +1353,11 @@
     });
 
     document.addEventListener('keydown', (e) => {
+      console.log('⌨️ KEYDOWN:', e.key, 'ctrl:', e.ctrlKey, 'meta:', e.metaKey, 'shift:', e.shiftKey);
+
       // Cmd/Ctrl + K to show transform popup
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        console.log('⌨️ CMD+K detected');
         e.preventDefault();
         showTransformPopup();
       }
@@ -1163,32 +1369,57 @@
       }
 
       if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+        console.log('⌨️ CMD+Z detected - calling undo()');
         e.preventDefault();
         undo();
       }
 
       if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+        console.log('⌨️ CMD+Y detected - calling redo()');
         e.preventDefault();
         redo();
       }
     });
 
 
-    // Simple stats update on content change with debounced state saving
-    let saveStateTimeout;
-    editor.addEventListener('input', () => {
-      updateStats();
+    // Simple stats update on content change with undo state saving
+    let hasUnsavedChanges = false;
 
-      // Save state after a short delay (debounced)
-      clearTimeout(saveStateTimeout);
-      saveStateTimeout = setTimeout(() => {
-        saveState();
-      }, 1000); // Save state 1 second after user stops typing
+    editor.addEventListener('input', () => {
+      // Save state before first change (debounced)
+      if (!hasUnsavedChanges) {
+        console.log('💾 First edit detected - saving state for undo');
+        saveStateBeforeChange();
+        hasUnsavedChanges = true;
+      }
+
+      updateStats();
     });
+
+    // Reset flag when undo/redo is used
+    const originalUndo = undo;
+    const originalRedo = redo;
+
+    undo = function() {
+      originalUndo();
+      hasUnsavedChanges = false;
+    };
+
+    redo = function() {
+      originalRedo();
+      hasUnsavedChanges = false;
+    };
 
     // Simple paste handler - just insert plain text
     editor.addEventListener('paste', (e) => {
       e.preventDefault();
+
+      // Save state before paste if no changes yet
+      if (!hasUnsavedChanges) {
+        console.log('💾 Paste detected - saving state for undo');
+        saveStateBeforeChange();
+        hasUnsavedChanges = true;
+      }
 
       // Get plain text and insert it
       const text = (e.clipboardData || window.clipboardData).getData('text');
@@ -1250,10 +1481,15 @@
       }
     });
 
+    // Mode toggle event listeners
+    textModeBtn.addEventListener('click', () => switchMode('text'));
+    jsonModeBtn.addEventListener('click', () => switchMode('json'));
+
     // Initialize
     loadStyleGuide(); // Load saved style guide
     loadModels(); // Load available models
-    saveState(); // Save initial state
+    undoBtn.disabled = true; // Initially disabled
+    redoBtn.disabled = true; // Initially disabled
     updateStats();
     setStatus('Ready. Select text, mark it, then Run.');
   </script>

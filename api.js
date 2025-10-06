@@ -46,7 +46,7 @@ class TextTransformAPI {
 
     // Default parameters
     this.defaultParams = {
-      max_tokens: 1000,
+      max_tokens: 8000, // High limit for complex transformations and JSON templates
       temperature: 0.3 // Lower temperature for more consistent transformations
     };
   }
@@ -110,7 +110,12 @@ class TextTransformAPI {
 DEINE AUFGABE:
 Nimm AUSSCHLIESSLICH die gegebene Struktur aus Gedankenfragmenten, Stichpunkten oder groben Ideen und entwickle daraus einen vollständig ausformulierten, kohärenten Text. Du darfst NICHT den Kontext oder andere Textteile bearbeiten - nur den spezifisch markierten Text.
 
-TRANSFORMATION PRINCIPLES:
+${additionalParams.mode === 'json' ? `JSON TEMPLATE MODUS:
+Du arbeitest mit einem JSON-Template für Advertorial-Seiten. Der Kontext enthält technische JSON-Struktur, aber du sollst AUSSCHLIESSLICH den markierten Copy-Text transformieren. Ignoriere alle JSON-Syntax, technischen Felder, URLs, Dateipfade, Variablennamen und strukturelle Elemente. Konzentriere dich NUR auf den Marketing-Copy-Inhalt.
+
+WICHTIG: Du transformierst NUR den selektierten Copy-Text, nicht die JSON-Struktur!
+
+` : ''}TRANSFORMATION PRINCIPLES:
 • Erkenne die beabsichtigte Gedankenfolge und logische Struktur
 • Schaffe natürliche Übergänge zwischen den Gedanken
 • Fülle Lücken in der Argumentation intelligent aus
@@ -145,7 +150,12 @@ Beginne sofort mit dem ersten Wort des transformierten Textes und höre mit dem 
 DEINE AUFGABE:
 Verfeinere AUSSCHLIESSLICH den gegebenen markierten Text durch Verbesserung von Formulierung, Stil, Grammatik und Fluss, während du die ursprüngliche Intention vollständig bewahrst. Du darfst NICHT den Kontext oder andere Textteile bearbeiten - nur den spezifisch markierten Text.
 
-VERFEINERUNGS-PRINZIPIEN:
+${additionalParams.mode === 'json' ? `JSON TEMPLATE MODUS:
+Du arbeitest mit einem JSON-Template für Advertorial-Seiten. Der Kontext enthält technische JSON-Struktur, aber du sollst AUSSCHLIESSLICH den markierten Copy-Text verfeinern. Ignoriere alle JSON-Syntax, technischen Felder, URLs, Dateipfade, Variablennamen und strukturelle Elemente. Konzentriere dich NUR auf die Verbesserung des Marketing-Copy-Inhalts.
+
+WICHTIG: Du verfeinerst NUR den selektierten Copy-Text, nicht die JSON-Struktur!
+
+` : ''}VERFEINERUNGS-PRINZIPIEN:
 • Korrigiere grammatische und stilistische Fehler
 • Optimiere Wortwahl und Satzstrukturen
 • Verbessere Lesbarkeit und Textfluss
@@ -173,7 +183,12 @@ Beginne sofort mit dem ersten Wort des verfeinerten Textes und höre mit dem let
 DEINE AUFGABE:
 Führe die gegebene Bearbeitungsanweisung AUSSCHLIESSLICH am markierten Text präzise aus, ohne die grundlegende Intention oder den Kontext zu verändern. Du darfst NICHT den Kontext oder andere Textteile bearbeiten - nur den spezifisch markierten Text.
 
-BEARBEITUNGS-PRINZIPIEN:
+${additionalParams.mode === 'json' ? `JSON TEMPLATE MODUS:
+Du arbeitest mit einem JSON-Template für Advertorial-Seiten. Der Kontext enthält technische JSON-Struktur, aber du sollst AUSSCHLIESSLICH den markierten Copy-Text nach der Anweisung bearbeiten. Ignoriere alle JSON-Syntax, technischen Felder, URLs, Dateipfade, Variablennamen und strukturelle Elemente. Konzentriere dich NUR auf die Bearbeitung des Marketing-Copy-Inhalts.
+
+WICHTIG: Du bearbeitest NUR den selektierten Copy-Text, nicht die JSON-Struktur!
+
+` : ''}BEARBEITUNGS-PRINZIPIEN:
 • Befolge die Anweisung exakt und vollständig
 • Behalte die ursprüngliche Bedeutung bei, außer explizit anders angewiesen
 • Mache nur die angeforderten Änderungen
@@ -221,6 +236,17 @@ WICHTIG: Transformiere AUSSCHLIESSLICH den oben markierten Text ("${additionalPa
 
 AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR die markierte rohe Struktur in einen vollständig ausformulierten, fließenden Text.' : additionalParams.systemPrompt === 'refine' ? 'Verfeinere NUR den markierten Text durch Verbesserung von Formulierung, Stil und Fluss.' : additionalParams.systemPrompt === 'edit' ? 'Führe die Bearbeitungsanweisung präzise NUR am markierten Text aus.' : 'Forme NUR den markierten Text entsprechend der Anweisung um.'}`;
 
+      // Debug logging
+      console.log('🔧 API TRANSFORM DEBUG:');
+      console.log('📝 Input text:', `"${text}"`);
+      console.log('📋 Instruction:', `"${instruction}"`);
+      console.log('🏷️ Mode:', additionalParams.mode);
+      console.log('🎭 System prompt type:', additionalParams.systemPrompt);
+      console.log('📄 Context length:', additionalParams.context ? additionalParams.context.length : 0);
+      console.log('🎨 Style guide present:', !!selectedStyleGuide);
+      console.log('📤 Full user prompt length:', userPrompt.length);
+      console.log('📤 User prompt preview:', userPrompt.substring(0, 500) + '...');
+
       const message = await this.client.messages.create({
         model: this.model,
         max_tokens: additionalParams.max_tokens || this.defaultParams.max_tokens,
@@ -236,6 +262,12 @@ AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR d
 
       // Extract the text content from Claude's response
       const transformedText = message.content[0].text.trim();
+
+      console.log('📥 Claude response received:');
+      console.log('📤 Original text:', `"${text}"`);
+      console.log('📥 Transformed text:', `"${transformedText}"`);
+      console.log('🔄 Length change:', `${text.length} → ${transformedText.length} (${transformedText.length - text.length > 0 ? '+' : ''}${transformedText.length - text.length})`);
+      console.log('🎯 Model used:', this.model);
 
       return {
         success: true,
@@ -294,7 +326,8 @@ AUFGABE: ${additionalParams.systemPrompt === 'articulate' ? 'Transformiere NUR d
 
     return await this.transform(text, instruction.trim(), {
       ...additionalParams,
-      systemPrompt: 'edit'
+      systemPrompt: 'edit',
+      max_tokens: 8000 // Higher limit for complex editing tasks, especially JSON templates
     });
   }
 
